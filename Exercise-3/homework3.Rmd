@@ -1,0 +1,236 @@
+---
+title: "CENG 4515 DATA SCIENCE AND ANALYTICS-HW3"
+author: "İrem Uslu"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Importing libraries
+
+```{r echo=T, results='hide', warning=FALSE, message=FALSE}
+  library(dplyr)
+  library(plyr)
+  library(caret)
+  library(factoextra)
+  library(skimr)
+  library(RANN)
+  library(cluster)
+  library(mice)
+  library(randomForest)
+  library(klaR)
+
+
+```
+
+
+### Dowload the "mole2_dataset.csv".
+
+```{r}
+getwd()
+mole <- read.csv("mole2_dataset.csv" , header=TRUE , sep=",")
+mole$diagnosis <-  factor(mole$diagnosis) 
+mole$sex <- NULL
+mole$X <- NULL
+mole$image_id <- NULL
+```
+
+
+### 1-) The data were splitted into 80% train and 20% test.   
+
+
+```{r}
+
+set.seed(200)
+trainIndex <- createDataPartition(mole$diagnosis, p = .8, 
+                                  list = FALSE)
+train <- mole[trainIndex, ]
+test <- mole[-trainIndex, ]
+
+x <- train[, 1:10]
+y <- train$diagnosis
+
+```
+
+
+### 2-) Used skim_to_wide function in skimr package.
+
+```{r , warning=FALSE}
+skimmed <- skim_to_wide(train)
+skimmed
+```
+
+Descriptive statistics of each column in the training dataset were examined.It consists of 11 columns and 321 observations. It consists of 1 factor and 10 numeric variables.The full_img_size column has the highest mean. The pixels_x column has the second highest mean.clin_size_long_diam_mm have the lowest standard deviation. That is, the clin_size_long_diam_mm values ​​are spread close to the mean.
+
+
+### 3-) Missing values were predicted and imputed.
+
+```{r}
+#KNN Imputation
+preProcessModel <- preProcess(train, method='knnImpute')
+preProcessModel
+
+
+#Imputation model was used to predict the values ​​of missing data points.
+train <- predict(preProcessModel, newdata = train)
+
+#KNN Imputation for test set
+preProcessModelTest <- preProcess(test, method='knnImpute')
+preProcessModelTest
+
+
+#Imputation model was used to predict the values ​​of missing data points for test set.
+test <- predict(preProcessModelTest, newdata = test)
+
+```
+
+As a result of KNN imputation, 10 variables were centered, 1 of them were ignored. For the predict of missing values, k was taken as 5 and 10 variables were scaled.And then all the missing values ​​are loaded.
+
+
+### 4-) All numerical variables were transformed with the preprocess function by setting them between 0 and 1.
+
+```{r}
+preProcess_range_model <- preProcess(train, method='range')
+train <- predict(preProcess_range_model, newdata = train)
+head(train,5)
+
+train$diagnosis <- y
+apply(train[, c(1:10)], 2, FUN=function(x){c('min'=min(x), 'max'=max(x))})
+
+```
+
+### 5-)Use caret’s featurePlot() function to visually.
+
+```{r}
+featurePlot(x = train[, c(1:10)], 
+            y = train$diagnosis, 
+            plot = "density",
+            strip=strip.custom(par.strip.text=list(cex=.7)),
+            auto.key = list(columns = 3),
+            adjust = 1.5,
+            layout = c(4,1),
+            scales = list(x = list(relation="free"), 
+                          y = list(relation="free")))
+
+
+```
+
+In order to understand whether a variable is important or not, we expect the density curves to be different from each other in terms of both kurtosis and skewness for the 4 classes.It can be said that the red, blue, green variables are important for the disease independent variable.But we can't say that it is very important for the corners variable because the values ​​for all 4 variables are very similar.
+
+### 6-)
+#### a)Use train() function to build the machine learning model. Choose knn algorithm.
+
+```{r , warning=FALSE}
+
+
+knn_fit
+trctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+set.seed(100)
+
+knn_fit <- train(diagnosis ~ . , data = train, method = "knn",
+ trControl=trctrl,
+ preProcess = c("center", "scale"),
+ tuneLength = 10)
+
+
+
+```
+7 is chosen as the best k value.Because the highest accuracy and kappa ratio belongs to k=7.
+
+#### b)Make predictions for test data using the predict() function.
+
+```{r}
+
+predicted <- predict(knn_fit, test)
+head(predicted)
+
+```
+
+#### c)Construct the confusion matrix to compare the predictions (data) vs the actuals (reference).
+
+```{r}
+confusionMatrix(reference = test$diagnosis, data = predicted)
+
+```
+
+We view the statistics of our results with the confusion matrix. It shows that our model accuracy for the test set is 67.09%.
+It can take values ​​between 56% and 77% with a 95% confidence interval.
+
+
+### 7-)
+#### a)Use train() function to build the machine learning model. Choose random forest algorithm.
+
+```{r}
+set.seed(100)
+
+modelLookup("rf")
+
+trControlRF <- trainControl(method = "repeatedcv" , number = 5,
+                            repeats=3,
+                            search = "random")
+
+modelRFTune <- train(diagnosis~. , data = train,
+                     method = "rf",
+                     tuneLength = 20,
+                     trControl = trControlRF)
+
+modelRFTune
+```
+
+#### b)Make predictions for test data using the predict() function.
+
+```{r}
+predictedRFTune<-predict(modelRFTune$finalModel , test)
+head(predictedRFTune)
+```
+
+#### c)Construct the confusion matrix to compare the predictions (data) vs the actuals (reference).
+
+```{r}
+confusionMatrix(reference = test$diagnosis, data = predictedRFTune)
+
+```
+
+We view the statistics of our results with the confusion matrix. <br>
+It shows that our model accuracy for the test set is 64.6%.<br>
+It can take values ​​between 53% and 75% with a 95% confidence interval.<br>
+Actual values ​​and predicted values ​​are not very similar to each other because the kappa value is low.
+
+### 8-)
+#### a)Use train() function to build the machine learning model. Choose random naive bayes algorithm.
+
+```{r ,warning=FALSE}
+set.seed(100)
+
+control <- trainControl(method = "cv", number = 5)
+
+
+model_nb <- train(diagnosis ~ ., data = train, method = "nb", trControl = control)
+model_nb
+
+
+```
+
+#### b)Make predictions for test data using the predict() function.
+
+```{r ,warning=FALSE}
+predictions_nb <- predict(model_nb, test)
+```
+
+#### c)Construct the confusion matrix to compare the predictions (data) vs the actuals (reference).
+
+```{r}
+confusionMatrix(test$diagnosis,predictions_nb)
+
+```
+
+When we apply naive bayes, the accuracy value is quite low. Therefore, it is very difficult to make a successful prediction. The Kappa value is a negative value, so it cannot be said that the actual values ​​and the predicted values ​​are similar to each other.
+
+9-) Compare and make more and more comments about the final results you find in steps “6-8”.
+The accuracy rate in the KNN algorithm is quite high compared to naive bayes.
+Therefore, our model accuracy for our test set with the knn algorithm model is higher.
+Likewise, the kappa ratio is higher in the knn algorithm model.
+Therefore, the actual values ​​and the predicted values ​​are more similar to each other in the knn algorithm.
+Among the models we created from 3 different algorithms, the most successful is the model belonging to the KNN algorithm. The highest accuracy value belongs to KNN with 67.09%.

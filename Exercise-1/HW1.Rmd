@@ -1,0 +1,252 @@
+---
+title: "Data Science and Analytics 2022"
+author: "İrem Uslu - 170709043"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+<style type="text/css">
+  body{
+  font-size: 11pt;
+}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<!--IMPORTANT!!!!! Please fill out the sections that say:"write your code here"-->
+<!--6. For every step above, write down one or two sentences description-->
+
+<br>
+
+```{r echo=T, results='hide', warning=FALSE, message=FALSE}
+  library(ggplot2)
+  library(tidyverse)
+  library(dplyr)
+  library(plyr)
+```
+
+<br>
+
+### 1) Download the dataset from the link below and import the dataset to R as a dataframe named ***'alcohol_data'***.
+
+<br>
+
+***https://www.kaggle.com/datasets/whenamancodes/alcohol-effects-on-study***
+
+<br>
+```{r}
+    alcohol_data <- read.csv("Portuguese.csv" , header = TRUE , sep = ",")
+```
+
+<br>
+
+### 2)
+
+#### A) Create a new dataframe as ***'alcohol_data_small'*** from ***'alcohol_data'*** by choosing at least 5 columns (at least one factor and one numeric). 
+
+<br>
+
+```{r}
+  alcohol_data_small <- alcohol_data [, c(1:4,6,13:14,16:17,27:28,31:33)]
+```
+
+
+<br>
+
+#### B) Check and ***re-format*** column/ variable types (factor, charecter, date, integer etc).
+
+<br>
+
+```{r}
+  str(alcohol_data_small)
+```
+
+The dataframe I created has 14 observations.These 14 observations consist of integer and character data types.
+
+
+```{r}
+  alcohol_data_small <- transform(alcohol_data_small ,
+                                  traveltime = as.factor(traveltime),
+                                  studytime = as.factor(studytime),
+                                  Walc = as.factor(Walc)
+                                  )
+```
+
+```{r} 
+  str(alcohol_data_small)
+
+```
+
+I converted travel time, daily alcohol consumption and study time into factor data type.
+
+<br>
+
+#### C) By using the given dictionary in kaggle, rename the variables as a more detailed version (e.g. 'F' => 'Female').
+
+<br>
+
+```{r}
+  alcohol_data_small <- transform(alcohol_data_small ,
+                                  school = as.factor(mapvalues(school , c("GP","MS"),c("Gabriel Pereira",
+                                                                                       "Mousinho da Silveira"))),
+                                  sex = as.factor(mapvalues(sex , c("F","M") , c("Female" , "Men"))),
+                                  address = as.factor(mapvalues(address , c("R" , "U") , c("Rural" , "Urban"))),
+                                  Pstatus = as.factor(mapvalues(Pstatus , c("A","T") , c("Together","Apart"))),
+                                  Dalc = as.factor(mapvalues(Dalc , c(1,2,3,4,5) , c("Very Low","Low","Medium","High","Very High"))))
+                                  
+```
+
+```{r}
+summary(alcohol_data_small)
+```
+
+I used more understandable names for some variables.I also examined how many observations I have with the summary() function and the data types of the variables.
+<br>
+
+### 3) 
+
+#### A) Use ***filter***, ***arrange***, ***select*** to manage your data.
+<br>
+
+```{r}
+  df <- alcohol_data_small %>% 
+                          filter(Pstatus == "Apart" & famsup == "yes" & G3>18)%>%
+                          select(school,Pstatus,famsup, G3)%>%
+                          arrange(G3)
+  df
+
+```
+
+
+I wanted to list the people whose parents live separately, who received educational support from their families other than school, and who had the highest final score. As a result, I observed that only 1 person met these criteria.
+
+
+```{r}
+  df1 <- alcohol_data_small %>% 
+                          filter(Dalc == "Very High" & Walc==5)%>%
+                          select(sex,studytime,Dalc,Walc)
+  
+head(df1,6)
+
+```
+
+I observed both the gender and weekly study duration of students with very high weekly and daily alcohol rates.
+
+
+```{r}
+  df2 <- alcohol_data_small %>% 
+                    filter(G1==G2 & G2==G3) %>%
+                    select(school,G1,G2,G3)%>%
+                    arrange(desc(G3))
+
+  head(df2,6)
+  
+```
+
+I observed which school the students whose 3 grades were equal to each other were studying in.
+
+
+
+<br>
+
+#### B) Use ***mutate*** or ***transmute*** to create a new dataframe and save it as ***'new_data.csv'*** in your current working directory.
+
+<br>
+
+```{r}
+  new_df <- alcohol_data_small%>%
+                              mutate(newG1 = G1+mean(G1),
+                                     newG2 = G2+mean(G2),
+                                     newG3 = G3+mean(G3))
+  head(new_df[c(15:17)])
+```
+
+Using mutate() I got the new variables by adding the average of each score on top of the existing scores, and with these new variables I created a new dataframe called new_df.
+
+```{r}
+  write.csv(x = new_df, file = "new_data.csv", row.names = FALSE)
+```
+
+I wrote and saved the new dataframe I created to a new csv file with write.csv().
+
+<br>
+
+### 4) Use ***'alcohol_data_small'*** dataframe and ggplot2 library to draw the following plots.
+
+<br>
+
+#### A) Draw a ***histogram*** and a ***bar chart*** for any variables and comment about shape and frequency. 
+
+<br>
+
+```{r}
+  ggplot(alcohol_data_small , mapping = aes(x = address, fill = traveltime)) + 
+  geom_bar(position = "identity",color="black") +
+  scale_fill_brewer(palette = "Pastel2")+
+  labs( x = "Student's home address type",
+        y = "Count",
+        title = "Travel times to school according to the student's home address type")
+
+  
+```
+
+Students living in rural areas take longer to reach school than students living in urban areas.
+Also, there are no students in rural areas who can reach it in 15 minutes or less.
+
+```{r}
+
+  ggplot(alcohol_data_small, aes(age,fill=school)) + 
+  geom_histogram(position="identity",binwidth=0.9,color="pink") +
+  scale_fill_brewer(palette = "Pastel2")+
+  ggtitle("Histogram graph of the age distribution of students in both schools") +
+  xlab("Student's Age") + 
+  ylab("Count")
+
+  
+```
+
+Most students at the school are between the ages of 16 and 18.Very few students go to school after the age of 20.
+
+
+
+```{r}
+  ggplot(alcohol_data_small, aes(G3, fill=Dalc)) + 
+  geom_histogram(position="identity", binwidth=5,color="black") +
+  scale_fill_brewer(palette = "Pastel2")+
+  facet_grid(Dalc ~ .) + 
+  ggtitle("Final scores according to students' daily alcohol consumption") +
+  xlab("Final Score") + 
+  ylab("Count")
+
+  
+```
+
+I examined the final scores of the students according to their daily alcohol consumption. At the 5th level, that is, the final scores of those who consume alcohol at a very high level decrease as much.
+
+<br>
+
+#### B) Draw a ***boxplot*** and comment about the distribution and outliers. 
+
+<br>
+
+```{r ,warning=FALSE}
+  ggplot(alcohol_data_small, mapping = aes(x = studytime, y = G1 , fill=studytime)) + 
+  geom_boxplot(outlier.size = 2 ,outlier.shape = 21)+
+  stat_summary(fun.y = "mean",shape=4,size=0.2)+
+  labs(title = "BoxPlot of First Period Scores by Studying Hours", x="Weekly Studying Times", y="First Period (G1) Scores")+
+  scale_fill_brewer(palette = "Pastel2")
+```
+<br>
+
+I have obtained a box chart where we can comment on the scores of the students in the first exam according to their weekly study time.
+
+While the 4th value, that is, those who work more than 10 hours a week, got a higher score in the exam, the 1st value, that is, those who work less than 2 hours per week, gathered around the lower score.
+
+In those with the 2nd value, that is, those who work between 2 and 5 hours a week, there are values ​​that are much higher and lower than the average. These are outlier values.
+
+In addition, those with the most weekly working hours have the highest average score.
+
+<br>

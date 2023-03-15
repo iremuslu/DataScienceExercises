@@ -1,0 +1,207 @@
+---
+title: "CENG 4515 DATA SCIENCE AND ANALYTICS-HW2"
+author: "İrem Uslu"
+date: "2022-11-17"
+output: html_document
+
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Importing libraries
+
+```{r echo=T, results='hide', warning=FALSE, message=FALSE}
+  library(ggplot2)
+  library(tidyverse)
+  library(dplyr)
+  library(plyr)
+  library(caret)
+  library(corrplot)
+  library(ROCR)
+  library(Rcpp)
+  library(gmodels)
+  library(pROC)
+  library(InformationValue)
+  library(factoextra)
+  library(car)
+
+```
+
+
+<br>
+
+### Dowload the "mole_dataset.csv" and data preprocessing.
+
+<br>
+```{r}
+mole <- read.csv("mole_dataset.csv" , header=TRUE , sep=",")
+
+mole$sex <- NULL
+mole$X <- NULL
+mole$image_id <- NULL
+
+
+mole$benign_malignant <-  factor(mole$benign_malignant) 
+summary(mole)
+```
+
+<br>
+
+### Correlation matrix and heatmap between independent variables.
+
+<br>
+```{r}
+
+mole <- na.omit(mole)
+cor <- cor(mole[,1:10])
+corrplot(cor,method = "circle")
+
+```
+
+
+<br>
+Dark blue dots have strong positive correlations.
+For example, it can be said that there is a strong relationship between the x and y pixels and the full size of the image.
+Or it can be said that the x and y pixels have a weak positive relationship with the vertices.
+<br>
+
+```{r}
+heatmap(cor(mole[,-11]))
+
+```
+
+<br>It can be said that there is an increasing relationship from the corners variable to the green variable.<br>
+
+
+
+
+### Build a logistic regression model to raw data first.Train and test dataset are created.
+
+
+
+```{r}
+#Malignant and benign numbers were checked for logistic regression. 
+dataMalignant <- mole %>%
+                filter(benign_malignant=="malignant")
+                nrow(dataMalignant)
+
+dataBenign <- mole %>% 
+              filter(benign_malignant=="benign")
+              nrow(dataBenign)
+
+
+set.seed(100)
+dataMalignantIndex <- sample(1:nrow(dataMalignant) , size= 0.70*nrow(dataMalignant))
+
+dataBenignIndex <- sample(1:nrow(dataBenign) , size= 0.70*nrow(dataMalignant))
+
+
+
+# Train dataset was created.
+trainMalignant <- dataMalignant[dataMalignantIndex,]
+trainBenign <- dataBenign[dataBenignIndex,]
+
+trainSet <- rbind(trainMalignant , trainBenign)
+table(trainSet$benign_malignant) #Malignant and benign values were equalized.
+
+# Test dataset was created.
+testMalignant <- dataMalignant[-dataMalignantIndex,]
+testBenign <- dataBenign[-dataBenignIndex,]
+
+testSet <- rbind(testMalignant , testBenign)
+table(testSet$benign_malignant) 
+
+
+```
+
+
+```{r}
+model <- glm(benign_malignant~.,family="binomial", data=trainSet)
+summary(model)
+
+```
+Variables such as age_approx, blue, green, non_overlapping_rate have a significant effect on determining the type of mole. However, pixel_y,red and full_img_size have no significant effect.
+
+
+### Confusion Matrix
+
+```{r}
+prediction <- predict(model , testSet ,type="response")
+
+cm <- confusionMatrix(testSet$benign_malignant , prediction)
+cm
+
+accur <- (cm[1,1] + cm[2,2])/ sum(cm)
+accur
+```
+43 benign and 39 malignant moles were predicted correctly.The accuracy rate of the model I created is 0.67. Correct predictions were made in the test data set at a rate of 0.67.
+
+### Roc Curve
+
+```{r}
+rocModel <- roc(testSet$benign_malignant ~ prediction) #control = negative class , case = positive class
+```
+```{r}
+plot(rocModel)
+
+rocModel
+```
+
+The larger the area under the ROC curve, the better our model will be, so the higher the prediction power.The AUC value of the model I created is 0.71, so the estimation performance is quite high.
+
+
+
+### Apply PCA
+
+```{r }
+
+molePr <- prcomp(mole[,-11] , scale=TRUE,center = TRUE)
+summary(molePr)
+
+
+
+```
+<br> I scaled and centered the data to standardize it.PC1 accounts for 46% of the total variance in the data. <br>
+
+
+### PCA plott and select best number of PCs for your data.
+
+```{r }
+screeplot(molePr, type = "l", npcs = 15, main = "Screeplot of the first 10 PCs")
+abline(h = 1, col="blue", lty=5)
+legend("topright", legend=c("Eigenvalue = 1"),
+       col=c("red"), lty=5, cex=0.6)
+
+```
+
+
+```{r }
+plot(molePr$x[,1],molePr$x[,2], xlab="PC1 (46.7%)", ylab = "PC2 (17.6%)", main = "PC1 / PC2 - plot")
+
+ggplot(mole , aes(molePr$x[,1],molePr$x[,2],col=benign_malignant,fill=benign_malignant)) + 
+  stat_ellipse(geom = "polygon" , col="black",alpha=0.5)+
+  geom_point(shape=21,col="black")+
+  xlab("Dim1 (46.7%)")+
+  ylab("Dim2 (17.6%)")+
+  ggtitle("2D PCA-plot from 11 feature dataset")
+
+
+
+```
+
+<br> I observed that the eigenvalues ​​of the first 3 components were >1. This explains a large part of the variance. So we can reduce our values from 10 to 3.It was also observed that more than 60% of the variance could be explained by the variables PC1 and PC2.That's why pc1 and pc2 components were used.The distribution of benign and malignant moles with 2 components was clearly observed. <br>
+
+
+
+
+
+
+
+
+
+
+
